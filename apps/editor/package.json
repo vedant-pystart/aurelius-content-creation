@@ -1,0 +1,40 @@
+{
+  "name": "@aurelius/editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build && node scripts/generate-sw.mjs",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aurelius/media": "0.1.0",
+    "@aurelius/composition": "0.1.0",
+    "@aurelius/export": "0.1.0",
+    "@aurelius/export-fallback": "0.1.0",
+    "@aurelius/project-model": "0.1.0",
+    "@fontsource/crimson-pro": "5.3.0",
+    "@fontsource/karla": "5.3.0",
+    "@remotion/player": "4.0.523",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-moveable": "0.56.0",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "6.8.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "27.0.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.0"
+  }
+}

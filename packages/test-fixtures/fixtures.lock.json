@@ -1,0 +1,11 @@
+{
+  "source": "web-platform-tests/wpt",
+  "commit": "9db4b48c1fbaf77e4db4687e6c2f465da001d024",
+  "fixtures": [
+    { "path": "media/test.mp4", "url": "https://raw.githubusercontent.com/web-platform-tests/wpt/9db4b48c1fbaf77e4db4687e6c2f465da001d024/media/test.mp4", "bytes": 192844, "sha256": "90417c4bcffe64860eee7d072867c0618ee9c10d768828f644f52df99663977b" },
+    { "path": "media/test.webm", "url": "https://raw.githubusercontent.com/web-platform-tests/wpt/9db4b48c1fbaf77e4db4687e6c2f465da001d024/media/test.webm", "bytes": 107949, "sha256": "d658a97ffddac1ac1bd9c524c0dde14edbd4ef91da86ad4ae9ccf9a4f94d633a" },
+    { "path": "media/speech.wav", "url": "https://raw.githubusercontent.com/web-platform-tests/wpt/9db4b48c1fbaf77e4db4687e6c2f465da001d024/media/speech.wav", "bytes": 95310, "sha256": "781f9ab2557797f929bc8782bd2ffb4de8a0af8a6b3fea853faaa88c2299c100" },
+    { "path": "media/rotated-orientation-6.jpg", "url": "https://raw.githubusercontent.com/web-platform-tests/wpt/9db4b48c1fbaf77e4db4687e6c2f465da001d024/css/css-images/image-orientation/support/exif-orientation-6-ru.jpg", "bytes": 1708, "sha256": "f28b2be684a08d716d846f1f9fbc932f030436acbd5b80c8028d107c25886275" },
+    { "path": "media/invalid-codec.mp4", "url": "https://raw.githubusercontent.com/web-platform-tests/wpt/9db4b48c1fbaf77e4db4687e6c2f465da001d024/media-source/mp4/invalid-codec.mp4", "bytes": 1542, "sha256": "6d01bc84b052d0fa975f46ec48c3d53f0fe92c01287d3a5f09659efb4e9a0158" }
+  ]
+}

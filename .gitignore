@@ -1,0 +1,9 @@
+.planning/
+node_modules/
+dist/
+*.log
+.vite/
+coverage/
+*.tsbuildinfo
+.DS_Store
+test-results/

@@ -1,0 +1,20 @@
+import Fastify from "fastify";
+import type { ConsentReceipt, FallbackManifest } from "@aurelius/export-fallback";
+import type { RenderJobService } from "./job-service";
+
+const id = /^[0-9a-f-]{36}$/i; const asset = /^[A-Za-z0-9_-]{1,128}$/;
+const auth = (value: unknown) => typeof value === "string" && value.startsWith("Bearer ") ? value.slice(7) : "";
+const safe = (error: unknown) => ({ code: error instanceof Error && /not-found/.test(error.message) ? "not-found" : "request-denied", retryable: false });
+export function createHttpServer(service: RenderJobService, options: { readonly editorOrigin?: string } = {}) {
+  const app = Fastify({ logger: false, bodyLimit: 2 * 1024 * 1024, requestTimeout: 60_000 });
+  app.addHook("onSend", async (_request, reply, payload) => { reply.header("Cache-Control", "no-store"); if (options.editorOrigin) reply.header("Access-Control-Allow-Origin", options.editorOrigin).header("Vary", "Origin"); return payload; });
+  app.options("/*", async (_request, reply) => reply.code(204).header("Access-Control-Allow-Headers", "Authorization, Content-Type").header("Access-Control-Allow-Methods", "POST, PUT, GET, DELETE").send());
+  app.post("/v1/exports", async (request, reply) => { try { const body = request.body as { manifest?: FallbackManifest; receipt?: ConsentReceipt }; if (!body?.manifest || !body.receipt) throw new Error("bad-request"); return reply.code(201).send(service.create(body.manifest, body.receipt)); } catch (error) { return reply.code(400).send(safe(error)); } });
+  app.addContentTypeParser("application/octet-stream", (_request, payload, done) => { const chunks: Buffer[] = []; let size = 0; payload.on("data", (chunk: Buffer) => { size += chunk.length; if (size <= 2_000_000_000) chunks.push(chunk); }); payload.on("end", () => done(null, Buffer.concat(chunks))); payload.on("error", done); });
+  app.put("/v1/exports/:jobId/assets/:assetId", async (request, reply) => { try { const { jobId, assetId } = request.params as { jobId: string; assetId: string }; if (!id.test(jobId) || !asset.test(assetId)) throw new Error("bad-request"); const body = request.body; if (!Buffer.isBuffer(body)) throw new Error("bad-request"); const bytes = body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength) as ArrayBuffer; service.upload(jobId, assetId, auth(request.headers.authorization), new Blob([bytes])); return reply.code(204).send(); } catch (error) { return reply.code(400).send(safe(error)); } });
+  app.post("/v1/exports/:jobId/start", async (request, reply) => { try { const { jobId } = request.params as { jobId: string }; if (!id.test(jobId)) throw new Error("bad-request"); await service.start(jobId, auth(request.headers.authorization)); return reply.code(202).send(); } catch (error) { return reply.code(400).send(safe(error)); } });
+  app.get("/v1/exports/:jobId", async (request, reply) => { try { const { jobId } = request.params as { jobId: string }; if (!id.test(jobId)) throw new Error("bad-request"); return reply.send(service.status(jobId, auth(request.headers.authorization))); } catch (error) { return reply.code(404).send(safe(error)); } });
+  app.delete("/v1/exports/:jobId", async (request, reply) => { try { const { jobId } = request.params as { jobId: string }; if (!id.test(jobId)) throw new Error("bad-request"); service.cancel(jobId, auth(request.headers.authorization)); return reply.code(202).send({ status: "cancelled" }); } catch (error) { return reply.code(404).send(safe(error)); } });
+  app.get("/v1/exports/:jobId/result", async (request, reply) => { try { const { jobId } = request.params as { jobId: string }; if (!id.test(jobId)) throw new Error("bad-request"); const result = service.result(jobId, auth(request.headers.authorization)); return reply.header("Content-Type", "video/mp4").header("Content-Disposition", 'attachment; filename="aurelius-video.mp4"').send(Buffer.from(await result.bytes.arrayBuffer())); } catch (error) { return reply.code(404).send(safe(error)); } });
+  return app;
+}

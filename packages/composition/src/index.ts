@@ -1,0 +1,16 @@
+export { evaluateFrame, alignmentTargets } from "./evaluate-frame";
+export { LOGICAL_WIDTH, alignmentTargets as getAlignmentTargets, boundsForTransform, cropGeometry, defaultCrop, defaultTransform, measureTextLayout, safeAreasFor } from "./layout";
+export type { AlignmentTarget, CropGeometry, LogicalRect, ResolvedFrame, ResolvedLayer, SafeAreas, TextLayout } from "./contracts";
+export { AureliusComposition } from "./AureliusComposition";
+export type { AureliusCompositionProps } from "./AureliusComposition";
+export { AURELIUS_FONT_STACKS, bundledFontStatus } from "./fonts";
+export { AURELIUS_STYLE_REGISTRY, aureliusStyle, allAureliusStyles, styleForProject } from "./aurelius/styles";
+export { resolveAureliusMotion } from "./aurelius/motion";
+export { compileAureliusTemplate } from "./aurelius/templates";
+export { planAureliusPacing, pacingSummary } from "./aurelius/pacing";
+export { segmentCaptionPhrases, parseCaptionFile, serializeCaptions, CAPTION_LIMITS } from "./aurelius/captions";
+export type { AureliusStyleId, AureliusPacing, AureliusTemplate, AureliusStyleDefinition, TemplateInput, MotionValues } from "./aurelius/contracts";
+export type { CaptionDiagnostic, CaptionResult } from "./aurelius/captions";
+export type { FontStatus } from "./fonts";
+export { sourceForAsset } from "./media";
+export type { AssetSourceMap } from "./media";

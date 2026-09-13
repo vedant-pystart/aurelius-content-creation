@@ -1,0 +1,13 @@
+:root {
+  --background: #fbf3e6;
+  --text: #2a2522;
+  --accent: #8b5e34;
+  --border: #e8ded1;
+  --gold: #d4af37;
+  color: var(--text);
+  background: var(--background);
+  font-family: Karla, ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body{margin:0;min-width:320px;min-height:100vh;background:var(--background)}button,input,select{font:inherit}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #d4af3777;outline-offset:2px}h1,h2,h3{font-family:"Crimson Pro",Georgia,"Times New Roman",serif}dl{display:grid;gap:12px}dl div{padding-top:8px;border-top:2px solid var(--gold)}dt{color:var(--accent);font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em}dd{margin:5px 0 0;font-weight:600}

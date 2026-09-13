@@ -1,0 +1,23 @@
+{
+  "name": "@aurelius/media",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@aurelius/project-model": "0.1.0",
+    "@remotion/media-parser": "4.0.523",
+    "dexie": "4.4.6",
+    "zod": "4.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "fake-indexeddb": "6.2.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@aurelius/export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "@aurelius/composition": "0.1.0",
+    "@aurelius/media": "0.1.0",
+    "@aurelius/project-model": "0.1.0",
+    "@remotion/web-renderer": "4.0.523"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  }
+}

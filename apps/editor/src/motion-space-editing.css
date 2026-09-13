@@ -1,0 +1,86 @@
+/* While a text line is being edited, keep it as one native text node.
+   Animated word spans are restored by React after blur. */
+.stage-copy > div[data-plain="true"] {
+  display: block !important;
+  min-width: 100%;
+  white-space: pre-wrap;
+  outline: 1px dashed #d4af37;
+  background: #fffdf89c;
+  cursor: text;
+}
+
+.stage-copy,
+.stage-copy > div,
+.stage-copy > div > span {
+  white-space: pre-wrap;
+}
+
+.stage-copy:focus-within > div:not([data-plain="true"]) {
+  display: none !important;
+}
+
+.stage-copy { letter-spacing: var(--tracking, -.055em) !important; }
+.stage-copy.motion-cascade > div > span { letter-spacing: var(--tracking, -.055em); }
+
+/* The legacy multiplier control is replaced by the explicit seconds control. */
+.control-section details > label:nth-of-type(2) { display: none !important; }
+.advanced-fine-tune { display: grid; gap: 10px; padding: 4px 0 10px; }
+.advanced-fine-tune label { display: grid !important; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin: 0 !important; font-size: 9px !important; }
+.advanced-fine-tune input[type="range"] { width: 100%; accent-color: #8b5e34; }
+.advanced-fine-tune output { min-width: 44px; color: #8b5e34; text-align: right; font-size: 10px; letter-spacing: 0; text-transform: none; }
+.fine-tune-reset { border: 1px solid #e8ded1; border-radius: 7px; padding: 8px; background: #f7eee4; color: #8b5e34; font: 700 10px Karla, system-ui, sans-serif; cursor: pointer; }
+.fine-tune-reset:hover { background: #f0dfcb; }
+
+/* The title is one editable surface; animation spans are display-only. */
+.title-editor { position: absolute; z-index: 3; top: 43%; left: 8%; right: 8%; min-height: 18%; outline: 1px dashed transparent; color: transparent; cursor: text; caret-color: var(--ink); font: 600 var(--preview-size) / 1 var(--font); letter-spacing: var(--tracking, -.055em); text-align: center; white-space: pre-wrap; }
+.title-editor:hover { outline-color: #d4af37; }
+.title-editor:focus { color: var(--ink); outline-color: #d4af37; background: #fffdf8d9; }
+.motion-stage:has(.title-editor:focus) .stage-copy { visibility: hidden; }
+
+/* Descenders such as g, y, and p need room below the baseline. */
+.stage-copy { line-height: 1.12 !important; padding: .12em 0 .22em; }
+
+/* The keyboard-hint chip distracts from direct editing. */
+.edit-note { display: none !important; }
+
+/* Keep the reel at the top of the workspace instead of vertically centering it. */
+.composer-stage { grid-template-rows: auto auto auto auto; align-content: start; }
+.motion-stage { height: min(64vh, 720px); margin: 0 auto; }
+.motion-stage.portrait { height: min(64vh, 640px); }
+
+.preview-playback { position: absolute; z-index: 6; left: 4%; bottom: 10%; border: 0; border-radius: 999px; padding: 6px 9px; background: #2a2522d9; color: #fffaf3; font: 700 9px Karla, system-ui, sans-serif; letter-spacing: .05em; cursor: pointer; }
+.preview-playback:hover { background: #8b5e34; }
+.motion-stage.is-paused .stage-copy > div > span { animation-play-state: paused !important; }
+
+/* Keep the controls usable while the preview workspace scrolls independently. */
+.composer-controls { position: sticky; top: 0; height: 100vh; min-height: 0; box-sizing: border-box; overscroll-behavior: contain; }
+@media (max-width: 760px) { .composer-controls { position: static; height: auto; } }
+
+.crop-controls { display: none !important; }
+.media-editor { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: #2a252299; backdrop-filter: blur(10px); }
+.media-editor-card { width: min(760px, 100%); max-height: min(860px, 94vh); overflow: auto; border: 1px solid #e8ded1; border-radius: 18px; padding: 24px; background: #fffaf3; box-shadow: 0 32px 100px #2a252250; }
+.media-editor-card header, .media-editor-card footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.media-editor-kicker { color: #8b5e34; font: 700 10px Karla, system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.media-editor-card h2 { margin: 4px 0 0; color: #2a2522; font: 600 32px/1 "Crimson Pro", Georgia, serif; }
+.media-editor-close, .media-editor-back { border: 0; background: transparent; color: #8b5e34; cursor: pointer; }
+.media-editor-close { font: 400 30px/1 Karla, system-ui, sans-serif; }
+.media-editor-steps { display: flex; gap: 22px; margin: 23px 0 16px; padding-bottom: 11px; border-bottom: 1px solid #e8ded1; color: #aa9b8e; font: 700 10px Karla, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.media-editor-steps span.active { color: #8b5e34; }
+.media-editor-video { display: block; width: min(100%, 560px); max-height: 280px; margin: 0 auto; border-radius: 11px; background: #2a2522; }
+.trim-readout { display: flex; justify-content: space-between; gap: 16px; margin: 14px 0 10px; color: #78695f; font: 400 11px/1.4 Karla, system-ui, sans-serif; }
+.trim-readout strong { color: #2a2522; font: 600 14px "Crimson Pro", Georgia, serif; white-space: nowrap; }
+.trim-timeline { position: relative; height: 31px; margin: 8px 4px 0; border-radius: 8px; background: repeating-linear-gradient(90deg, #e8ded1 0 1px, transparent 1px 10%); }
+.trim-window { position: absolute; inset: 0; border: 2px solid #8b5e34; border-radius: 7px; background: #d4af3724; pointer-events: none; }
+.trim-timeline input { position: absolute; inset: 0; width: 100%; margin: 0; appearance: none; background: transparent; pointer-events: none; }
+.trim-timeline input::-webkit-slider-thumb { width: 15px; height: 31px; border: 0; border-radius: 4px; background: #8b5e34; appearance: none; pointer-events: auto; cursor: ew-resize; }
+.trim-times { display: flex; justify-content: space-between; color: #8b5e34; font: 700 10px Karla, system-ui, sans-serif; }
+.media-editor-frame { padding-top: 4px; color: #77685f; font: 400 12px Karla, system-ui, sans-serif; }
+.frame-canvas { position: relative; width: min(100%, 340px); margin: 15px auto; overflow: hidden; background: #2a2522; cursor: grab; box-shadow: inset 0 0 0 1px #ffffff33; touch-action: none; }
+.frame-canvas:active { cursor: grabbing; }
+.frame-canvas.reel { aspect-ratio: 9 / 16; }.frame-canvas.portrait { aspect-ratio: 4 / 5; }
+.frame-canvas video, .frame-canvas img { position: absolute; width: 100%; height: 100%; inset: 0; object-fit: cover; object-position: var(--editor-x, 50%) var(--editor-y, 50%); transform: scale(var(--editor-zoom, 1)); transform-origin: var(--editor-x, 50%) var(--editor-y, 50%); pointer-events: none; }
+.media-editor-frame label { display: grid; grid-template-columns: 45px 1fr; align-items: center; gap: 10px; margin: 15px auto 5px; width: min(100%, 340px); color: #8b5e34; font: 700 10px Karla, system-ui, sans-serif; letter-spacing: .05em; text-transform: uppercase; }
+.media-editor-frame input { accent-color: #8b5e34; }
+.media-editor-frame small { display: block; text-align: center; }
+.media-editor-card footer { margin-top: 22px; }.media-editor-next { margin-left: auto; border: 0; border-radius: 8px; padding: 10px 14px; background: #2a2522; color: #fffaf3; font: 700 11px Karla, system-ui, sans-serif; cursor: pointer; }
+@media (max-width: 600px) { .media-editor { padding: 10px; }.media-editor-card { padding: 17px; border-radius: 13px; }.media-editor-card h2 { font-size: 27px; }.trim-readout { display: grid; gap: 4px; } }

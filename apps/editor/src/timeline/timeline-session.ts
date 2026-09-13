@@ -1,0 +1,41 @@
+import { EditorHistory, executeCommand, frameIndexToTimeUs, timeUs, timeUsToFrameIndex, type Clip, type EditorCommand, type ProjectDoc } from "@aurelius/project-model";
+import type { AutosaveCoordinator } from "@aurelius/media";
+
+export interface TimelineSnapshot { readonly project: ProjectDoc; readonly selectedId?: string | undefined; readonly playheadUs: number; readonly zoom: number; readonly playing: boolean; readonly message?: string | undefined; readonly undoLabel?: string | undefined; readonly redoLabel?: string | undefined }
+type Listener = (snapshot: TimelineSnapshot) => void;
+const id = (prefix: string) => `${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+
+/** The only UI-side bridge to persisted timeline changes. */
+export class TimelineSession {
+  private readonly history = new EditorHistory(); private readonly listeners = new Set<Listener>(); private disposed = false;
+  private snapshotValue: TimelineSnapshot;
+  constructor(project: ProjectDoc, private readonly autosave: AutosaveCoordinator | null, private readonly writable: () => boolean, private readonly now = () => new Date().toISOString()) { this.snapshotValue = { project, playheadUs: 0, zoom: 96, playing: false }; }
+  get snapshot(): TimelineSnapshot { return this.snapshotValue; }
+  subscribe(listener: Listener): () => void { this.listeners.add(listener); listener(this.snapshotValue); return () => this.listeners.delete(listener); }
+  private publish(next: Partial<TimelineSnapshot>): void { if (this.disposed) return; this.snapshotValue = { ...this.snapshotValue, ...next, undoLabel: this.history.undoLabel, redoLabel: this.history.redoLabel }; this.listeners.forEach((listener) => listener(this.snapshotValue)); }
+  select(selectedId?: string): void { this.publish({ selectedId }); }
+  setPlayhead(proposed: number): void { const rate = this.snapshotValue.project.composition.frameRate; const raw = timeUs(Math.max(0, Math.round(proposed))); this.publish({ playheadUs: frameIndexToTimeUs(timeUsToFrameIndex(raw, rate, "nearest"), rate) }); }
+  setZoom(zoom: number): void { this.publish({ zoom: Math.max(24, Math.min(480, Math.round(zoom))) }); }
+  setPlaying(playing: boolean): void { this.publish({ playing }); }
+  commit(command: EditorCommand): boolean {
+    if (!this.writable()) { this.publish({ message: "This project is read-only. Take over editing to make changes." }); return false; }
+    try { const result = executeCommand(this.snapshotValue.project, command, { committedAtIso: this.now() }); this.history.record(result.transaction); this.autosave?.submit(result.nextDoc); const selectedId = this.snapshotValue.selectedId && (result.nextDoc.clips[this.snapshotValue.selectedId] || result.nextDoc.captionCues[this.snapshotValue.selectedId]) ? this.snapshotValue.selectedId : undefined; this.publish({ project: result.nextDoc, selectedId, message: undefined }); return true; }
+    catch (cause) { this.publish({ message: cause instanceof Error ? cause.message : "That edit could not be applied." }); return false; }
+  }
+  undo(): boolean { const result = this.history.undo(this.snapshotValue.project); if (!result) return false; this.autosave?.submit(result.doc); this.publish({ project: result.doc, message: `Undid ${result.transaction.label}` }); return true; }
+  redo(): boolean { const result = this.history.redo(this.snapshotValue.project); if (!result) return false; this.autosave?.submit(result.doc); this.publish({ project: result.doc, message: `Redid ${result.transaction.label}` }); return true; }
+  addAsset(assetId: string): boolean {
+    const asset = this.snapshotValue.project.assets[assetId]; if (!asset) return false; const track = this.snapshotValue.project.trackOrder.map((trackId) => this.snapshotValue.project.tracks[trackId]!).find((candidate) => candidate.kind === (asset.kind === "audio" ? "audio" : "primary")); if (!track) return false;
+    const durationUs = asset.kind === "image" ? timeUs(3_000_000) : asset.durationUs ?? timeUs(3_000_000); const startUs = this.projectEnd();
+    if (asset.kind === "audio") return this.commit({ type: "audio/add", expectedRevision: this.snapshotValue.project.revision, clip: { id: id("audio"), trackId: track.id, startUs, durationUs, layer: 0, enabled: true, kind: "audio", role: "music", assetId: asset.id, sourceInUs: timeUs(0), sourceDurationUs: durationUs, muted: false, volume: 1, fadeInUs: timeUs(0), fadeOutUs: timeUs(0) } });
+    const clip: Clip = { id: id("clip"), trackId: track.id, startUs, durationUs, layer: 0, enabled: true, kind: asset.kind, assetId: asset.id, sourceInUs: timeUs(0), sourceDurationUs: durationUs, volume: 1, fadeInUs: timeUs(0), fadeOutUs: timeUs(0) };
+    const added = this.commit({ type: "clip/add", expectedRevision: this.snapshotValue.project.revision, clip }); if (added) this.select(clip.id); return added;
+  }
+  addText(role: "heading" | "quote" | "label" | "credit" | "body" = "heading"): boolean { const project = this.snapshotValue.project; const track = project.trackOrder.map((trackId) => project.tracks[trackId]!).find((candidate) => candidate.kind === "text"); const styleId = project.textStyleOrder[0]; if (!track || !styleId) return false; const copy: Record<typeof role, string> = { heading: "A thought worth keeping", quote: "\u201cKeep what is useful.\u201d", label: "AURELIUS", credit: "— Marcus Aurelius", body: "Make room for the thing that matters." }; const y: Record<typeof role, number> = { heading: .42, quote: .48, label: .16, credit: .76, body: .55 }; const clip: Clip = { id: id("text"), trackId: track.id, startUs: this.snapshotValue.playheadUs as ReturnType<typeof timeUs>, durationUs: timeUs(3_000_000), layer: 10, enabled: true, kind: "text", content: copy[role], textStyleId: styleId, transform: { x: .5, y: y[role], scaleX: role === "label" || role === "credit" ? .55 : 1, scaleY: role === "label" || role === "credit" ? .55 : 1, rotationDeg: 0, opacity: 1 }, motion: { treatment: "editorial-rise", entranceUs: timeUs(300_000), holdUs: timeUs(2_400_000), exitUs: timeUs(300_000), staggerUs: timeUs(60_000) } }; const added = this.commit({ type: "text/add", expectedRevision: project.revision, clip }); if (added) this.select(clip.id); return added; }
+  addCaption(): boolean { const project = this.snapshotValue.project; const track = project.trackOrder.map((trackId) => project.tracks[trackId]!).find((candidate) => candidate.kind === "caption"); const styleId = track ? project.captionSettings[track.id]?.defaultTextStyleId : undefined; if (!track || !styleId) return false; const startUs = this.snapshotValue.playheadUs as ReturnType<typeof timeUs>; return this.commit({ type: "caption/add", expectedRevision: project.revision, cue: { id: id("caption"), trackId: track.id, startUs, endUs: timeUs(startUs + 1_500_000), text: "Aurelius", emphasisWordIndexes: [], position: "lower", textStyleId: styleId } }); }
+  splitSelected(): boolean { const clip = this.snapshotValue.selectedId ? this.snapshotValue.project.clips[this.snapshotValue.selectedId] : undefined; return !!clip && this.commit({ type: "timeline/split", expectedRevision: this.snapshotValue.project.revision, clipId: clip.id, newClipId: id("clip"), atUs: this.snapshotValue.playheadUs as ReturnType<typeof timeUs> }); }
+  duplicateSelected(): boolean { const clip = this.snapshotValue.selectedId ? this.snapshotValue.project.clips[this.snapshotValue.selectedId] : undefined; return !!clip && this.commit({ type: "timeline/duplicate", expectedRevision: this.snapshotValue.project.revision, clipId: clip.id, newClipId: id("clip"), startUs: timeUs(clip.startUs + clip.durationUs) }); }
+  deleteSelected(ripple = false): boolean { const clip = this.snapshotValue.selectedId ? this.snapshotValue.project.clips[this.snapshotValue.selectedId] : undefined; return !!clip && this.commit({ type: ripple ? "timeline/rippleDelete" : "timeline/delete", expectedRevision: this.snapshotValue.project.revision, clipId: clip.id }); }
+  private projectEnd(): ReturnType<typeof timeUs> { return timeUs(Math.max(0, ...Object.values(this.snapshotValue.project.clips).map((clip) => clip.startUs + clip.durationUs), ...Object.values(this.snapshotValue.project.captionCues).map((cue) => cue.endUs))); }
+  dispose(): void { this.disposed = true; this.listeners.clear(); this.history.clear(); }
+}

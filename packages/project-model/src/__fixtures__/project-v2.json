@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "id": "historical-project",
+  "revision": 7,
+  "title": "Historical Aurelius Cut",
+  "createdAt": "2026-09-01T10:00:00.000Z",
+  "updatedAt": "2026-09-02T10:00:00.000Z",
+  "composition": { "width": 1080, "height": 1920, "frameRate": { "numerator": 30, "denominator": 1 }, "background": "#FBF3E6" },
+  "brandTokens": { "background": "#FBF3E6", "text": "#2A2522", "accent": "#8B5E34", "border": "#E8DED1", "gold": "#D4AF37", "headingFont": "Crimson Pro", "bodyFont": "Karla" },
+  "assetOrder": ["asset-video"],
+  "assets": { "asset-video": { "id": "asset-video", "name": "Interview", "kind": "video", "mimeType": "video/mp4", "byteSize": 2048, "durationUs": 8000000, "width": 1080, "height": 1920, "fingerprint": "historical-video" } },
+  "trackOrder": ["track-primary", "track-text", "track-caption"],
+  "tracks": {
+    "track-primary": { "id": "track-primary", "name": "Primary", "kind": "primary", "muted": false, "locked": false, "clipOrder": ["clip-1", "clip-2"] },
+    "track-text": { "id": "track-text", "name": "Text", "kind": "text", "muted": false, "locked": false, "clipOrder": ["clip-text"] },
+    "track-caption": { "id": "track-caption", "name": "Captions", "kind": "caption", "muted": false, "locked": false, "clipOrder": [] }
+  },
+  "clips": {
+    "clip-1": { "id": "clip-1", "trackId": "track-primary", "kind": "video", "startUs": 0, "durationUs": 2000000, "layer": 0, "enabled": true, "assetId": "asset-video", "sourceInUs": 500000, "sourceDurationUs": 2000000, "volume": 1, "fadeInUs": 0, "fadeOutUs": 0 },
+    "clip-2": { "id": "clip-2", "trackId": "track-primary", "kind": "video", "startUs": 2000000, "durationUs": 2500000, "layer": 0, "enabled": true, "assetId": "asset-video", "sourceInUs": 3000000, "sourceDurationUs": 2500000, "volume": 1, "fadeInUs": 0, "fadeOutUs": 0 },
+    "clip-text": { "id": "clip-text", "trackId": "track-text", "kind": "text", "startUs": 1000000, "durationUs": 3000000, "layer": 1, "enabled": true, "content": "The obstacle is the way.", "textStyleId": "style-main", "transform": { "x": 540, "y": 960, "scaleX": 1, "scaleY": 1, "rotationDeg": 0, "opacity": 1 }, "motion": { "treatment": "editorial-rise", "entranceUs": 500000, "holdUs": 2000000, "exitUs": 500000, "staggerUs": 25000 } }
+  },
+  "transitionOrder": [], "transitions": {},
+  "captionCueOrder": ["cue-1"],
+  "captionCues": { "cue-1": { "id": "cue-1", "trackId": "track-caption", "startUs": 250000, "endUs": 1250000, "text": "The obstacle", "emphasisWordIndexes": [1], "position": "lower" } },
+  "textStyleOrder": ["style-main"],
+  "textStyles": { "style-main": { "id": "style-main", "name": "Editorial", "family": "Crimson Pro", "weight": 600, "sizePx": 96, "lineHeight": 1.05, "letterSpacingEm": -0.02, "color": "#2A2522", "align": "center" } },
+  "markerOrder": ["marker-cut"], "markers": { "marker-cut": { "id": "marker-cut", "timeUs": 2000000, "label": "Cut", "color": "#D4AF37" } }
+}

@@ -1,0 +1,3 @@
+.composition-preview{position:relative;width:min(100%,540px);margin:auto;box-shadow:0 20px 56px #2a25222b;border:1px solid var(--border);background:var(--background)}
+.composition-preview .remotion-player{width:100%!important;height:100%!important}
+.composition-preview-state{display:grid;place-items:center;min-height:250px;padding:24px;text-align:center;color:var(--accent);background:var(--background)}

@@ -1,0 +1,10 @@
+{
+  "name": "@aurelius/test-fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fixtures:fetch": "node scripts/fetch-media.mjs",
+    "fixtures:verify": "node scripts/fetch-media.mjs --verify"
+  }
+}

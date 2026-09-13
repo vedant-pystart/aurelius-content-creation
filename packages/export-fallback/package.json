@@ -1,0 +1,7 @@
+{
+  "name": "@aurelius/export-fallback", "version": "0.1.0", "private": true, "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "test": "vitest run --passWithNoTests", "typecheck": "tsc -p tsconfig.json --pretty false" },
+  "dependencies": { "@aurelius/export": "0.1.0", "@aurelius/media": "0.1.0", "@aurelius/project-model": "0.1.0", "zod": "4.6.2" },
+  "devDependencies": { "@types/node": "22.20.2", "typescript": "7.0.2", "vitest": "5.0.0" }
+}

@@ -1,0 +1,17 @@
+import { useCallback, useEffect, useState } from "react";
+import { executeCommand, type ProjectDoc } from "@aurelius/project-model";
+import type { AppRuntime } from "../runtime";
+import type { AutosaveCoordinator, ImportProgress, MediaError, MissingAsset, StorageSnapshot, StoredMediaAsset } from "@aurelius/media";
+
+export function useMediaLibrary(runtime:AppRuntime,project:ProjectDoc,onProjectChange:(project:ProjectDoc)=>void,autosave:AutosaveCoordinator|null){
+ const [assets,setAssets]=useState<readonly StoredMediaAsset[]>([]);const [progress,setProgress]=useState<Readonly<Record<string,ImportProgress>>>({});const [errors,setErrors]=useState<readonly MediaError[]>([]);const [storage,setStorage]=useState<StorageSnapshot|null>(null);const [missing,setMissing]=useState<readonly MissingAsset[]>([]);const [loading,setLoading]=useState(true);
+ const refresh=useCallback(async()=>{setLoading(true);try{setAssets(await runtime.media.listForProject(project.id));setMissing(await runtime.relink.reconcileProject(project));const snapshot=await runtime.storage.inspect();if(snapshot.ok)setStorage(snapshot.value);}finally{setLoading(false)}},[runtime,project]);
+ useEffect(()=>{void refresh();const unsub=runtime.ingest.subscribe((next)=>setProgress((current)=>({...current,[next.importId]:next})));return unsub},[refresh,runtime]);
+ const commit=useCallback((next:ProjectDoc)=>{onProjectChange(next);autosave?.submit(next)},[autosave,onProjectChange]);
+ const importFiles=useCallback(async(files:readonly File[])=>{setErrors([]);const result=await runtime.ingest.importBatch(project.id,files);let current=project;const failures=[...result.failures.map((item)=>item.error)];for(const success of result.successes){if(current.assets[success.assetRef.id])continue;try{current=executeCommand(current,{type:"asset/register",expectedRevision:current.revision,asset:success.assetRef},{committedAtIso:new Date().toISOString()}).nextDoc;commit(current)}catch(cause){await runtime.media.unlink(project.id,success.asset.id,new Date().toISOString());failures.push(cause as MediaError)}}setErrors(failures);await refresh()},[commit,project,refresh,runtime]);
+ const rename=useCallback(async(assetId:string,name:string)=>{const stored=await runtime.media.rename(assetId,name,new Date().toISOString());const next=executeCommand(project,{type:"asset/rename",expectedRevision:project.revision,assetId,name:stored.displayName},{committedAtIso:new Date().toISOString()}).nextDoc;commit(next);await refresh()},[commit,project,refresh,runtime]);
+ const remove=useCallback(async(assetId:string)=>{try{const next=executeCommand(project,{type:"asset/remove",expectedRevision:project.revision,assetId},{committedAtIso:new Date().toISOString()}).nextDoc;commit(next);await runtime.media.unlink(project.id,assetId,new Date().toISOString());await refresh()}catch(cause){setErrors([cause as MediaError])}},[commit,project,refresh,runtime]);
+ const replace=useCallback(async(assetId:string,file:File)=>{const result=await runtime.relink.relink(project,assetId,file);if(result.ok){autosave?.adoptPersisted(result.value);onProjectChange(result.value);await refresh()}else setErrors([result.error])},[autosave,onProjectChange,project,refresh,runtime]);
+ const requestPersistence=useCallback(async()=>{const result=await runtime.storage.requestPersistence();if(result.ok)setStorage(result.value);else setErrors([result.error])},[runtime]);
+ return{assets,progress: Object.values(progress),errors,storage,missing,loading,refresh,importFiles,rename,remove,replace,requestPersistence};
+}

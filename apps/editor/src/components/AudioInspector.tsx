@@ -1,0 +1,7 @@
+import type { AudioClip, ProjectDoc } from "@aurelius/project-model";
+import type { TimelineSession } from "../timeline/timeline-session";
+
+export function AudioInspector({ project, clip, session, writable }: { project: ProjectDoc; clip: AudioClip; session: TimelineSession; writable: boolean }) {
+  const change = (value: Partial<Pick<AudioClip, "muted" | "volume" | "fadeInUs" | "fadeOutUs">>) => session.commit({ type: "audio/setMix", expectedRevision: project.revision, clipId: clip.id, ...value });
+  return <section className="audio-inspector"><p className="kicker">{clip.role} audio</p><strong>{project.assets[clip.assetId]?.name ?? "Audio source"}</strong><label><input type="checkbox" checked={clip.muted} disabled={!writable} onChange={(event) => change({ muted: event.target.checked })} /> Mute</label><label>Volume <input type="range" min="0" max="2" step=".05" value={clip.volume} disabled={!writable} onChange={(event) => change({ volume: Number(event.target.value) })} /><output>{Math.round(clip.volume * 100)}%</output></label><details><summary>Fades</summary><label>Fade in <input type="range" min="0" max={clip.durationUs} step="100000" value={clip.fadeInUs} disabled={!writable} onChange={(event) => change({ fadeInUs: Number(event.target.value) as never })} /></label><label>Fade out <input type="range" min="0" max={clip.durationUs} step="100000" value={clip.fadeOutUs} disabled={!writable} onChange={(event) => change({ fadeOutUs: Number(event.target.value) as never })} /></label></details></section>;
+}

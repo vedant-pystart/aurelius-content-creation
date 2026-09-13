@@ -8,6 +8,9 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   await expect(stage.getByRole("button", { name: "Play preview" })).toBeVisible();
   await stage.getByRole("button", { name: "Play preview" }).click();
   await expect(stage.getByRole("button", { name: "Pause preview" })).toBeVisible();
+  await page.waitForTimeout(150);
+  const replayDelays = await stage.locator(".stage-copy span").evaluateAll((words) => [...new Set(words.map((word) => getComputedStyle(word).animationDelay))]);
+  expect(replayDelays.length).toBeGreaterThan(1);
   await expect(stage.locator(".title-editor[contenteditable=true]")).toHaveCount(1);
   await expect(stage.locator(".stage-copy [contenteditable=true]")).toHaveCount(0);
   const titleBox = page.locator(".title-editor");
@@ -24,9 +27,15 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   await expect.poll(() => titleBox.evaluate((node) => node.textContent)).toBe("Move with purpose  every day");
   await page.getByText("Fine tune text", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Animate each word" })).toBeChecked();
+  await page.waitForTimeout(150);
+  const wordDelays = await stage.locator(".stage-copy span").evaluateAll((words) => [...new Set(words.map((word) => getComputedStyle(word).animationDelay))]);
+  expect(wordDelays.length).toBeGreaterThan(1);
   await page.getByRole("textbox", { name: "Highlight phrase" }).fill("purpose");
-  await page.getByRole("combobox", { name: "Highlight style" }).selectOption("accent");
+  await page.getByRole("checkbox", { name: "Color" }).check();
   await expect(stage.locator(".phrase-accent")).toHaveCount(1);
+  await page.getByRole("checkbox", { name: "Glow" }).check();
+  await page.getByRole("checkbox", { name: "Delayed start" }).check();
+  await expect(stage.locator(".phrase-glow.phrase-delay")).toHaveCount(1);
   await page.getByRole("button", { name: "Lower" }).click();
   await expect.poll(() => stage.locator(".stage-copy").evaluate((node) => node.style.top)).toBe("68%");
   await page.getByRole("checkbox", { name: "Show platform safe zones" }).check();
@@ -65,8 +74,12 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   await expect(stage).toHaveAttribute("data-instance", token!);
 
   await page.locator(".media-drop input").setInputFiles({ name: "backdrop.svg", mimeType: "image/svg+xml", buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="#8B5E34"/></svg>') });
-  await expect(stage.locator("img")).toBeVisible();
+  await expect(stage.locator(".motion-backdrop-image")).toBeVisible();
   await expect(stage.locator(".stage-copy")).toContainText("Move with purpose");
+  await stage.evaluate((element) => { const file = new File(['<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><circle cx="100" cy="50" r="45" fill="#D4AF37"/></svg>'], "badge.svg", { type: "image/svg+xml" }), transfer = new DataTransfer(); transfer.items.add(file); element.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer })); });
+  await expect(stage.locator(".overlay-item img[alt='badge.svg']")).toBeVisible();
+  await stage.locator(".overlay-item").hover();
+  await expect(stage.getByRole("button", { name: "Resize badge.svg" })).toBeVisible();
   await page.getByRole("button", { name: "✎ Crop backdrop" }).click();
   const backdropEditor = page.getByRole("dialog", { name: "Edit backdrop" });
   await expect(backdropEditor).toBeVisible();
@@ -77,7 +90,7 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   await expect(backdropEditor).toBeVisible();
   await backdropEditor.getByRole("button", { name: "Close backdrop editor" }).click();
   await page.locator('input[type="range"]').first().press("ArrowRight");
-  await expect(stage.locator("img")).toBeVisible();
+  await expect(stage.locator(".motion-backdrop-image")).toBeVisible();
   await page.getByRole("button", { name: "+ Scene" }).click();
   await expect(page.locator(".scene-strip button")).toHaveCount(2);
 });

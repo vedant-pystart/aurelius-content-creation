@@ -24,6 +24,14 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   await expect.poll(() => titleBox.evaluate((node) => node.textContent)).toBe("Move with purpose  every day");
   await page.getByText("Fine tune text", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Animate each word" })).toBeChecked();
+  await page.getByRole("textbox", { name: "Highlight phrase" }).fill("purpose");
+  await page.getByRole("combobox", { name: "Highlight style" }).selectOption("accent");
+  await expect(stage.locator(".phrase-accent")).toHaveCount(1);
+  await page.getByRole("button", { name: "Lower" }).click();
+  await expect.poll(() => stage.locator(".stage-copy").evaluate((node) => node.style.top)).toBe("68%");
+  await page.getByRole("checkbox", { name: "Show platform safe zones" }).check();
+  await expect(stage.locator(".safe-zones")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download cover" })).toBeVisible();
   const entrySeconds = page.getByRole("slider", { name: "Entry speed in seconds" });
   await expect(entrySeconds).toHaveValue("1.4");
   await entrySeconds.press("ArrowRight");
@@ -37,7 +45,7 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   const reelBox = await stage.boundingBox();
   const previewFontSize = await page.locator(".stage-copy").evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   expect(previewFontSize).toBeCloseTo(reelBox!.width * 88 / 1080, 1);
-  await page.getByRole("combobox").selectOption("portrait");
+  await page.locator(".composer-stage > header").getByRole("combobox").selectOption("portrait");
   const portraitBox = await stage.boundingBox();
   expect(portraitBox!.width / portraitBox!.height).toBeGreaterThan(reelBox!.width / reelBox!.height);
   await page.getByRole("textbox", { name: "Text color hex" }).fill("#D4AF37");

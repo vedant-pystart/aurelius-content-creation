@@ -10,5 +10,5 @@ createRoot(root).render(<App />);
 // The worker contains only revisioned build assets. It never sees imported
 // media, project data, previews, range requests, or exported MP4 bytes.
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => { void navigator.serviceWorker.register("/sw.js", { scope: "/" }); });
+  window.addEventListener("load", () => { void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }); });
 }

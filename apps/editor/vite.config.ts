@@ -5,12 +5,13 @@ import { join, relative } from "node:path";
 
 const libraryModule = "virtual:aurelius-asset-library", resolvedLibraryModule = `\0${libraryModule}`;
 const supportedAssets = new Set([".avif", ".gif", ".jpeg", ".jpg", ".png", ".svg", ".webp"]);
+const basePath = (process.env.VITE_BASE_PATH ?? "/").replace(/^([^/])/, "/$1").replace(/([^/])$/, "$1/");
 const discoverAssets = (directory: string, root = directory): { name: string; url: string }[] => readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
   const path = join(directory, entry.name);
   if (entry.isDirectory()) return discoverAssets(path, root);
   const extension = entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase();
-  return supportedAssets.has(extension) ? [{ name: entry.name, url: `/assets/${relative(root, path).split("\\").join("/").split("/").map(encodeURIComponent).join("/")}` }] : [];
+  return supportedAssets.has(extension) ? [{ name: entry.name, url: `${basePath}assets/${relative(root, path).split("\\").join("/").split("/").map(encodeURIComponent).join("/")}` }] : [];
 });
 const assetLibrary = () => ({ name: "aurelius-asset-library", resolveId(id: string) { return id === libraryModule ? resolvedLibraryModule : undefined; }, load(id: string) { return id === resolvedLibraryModule ? `export default ${JSON.stringify(discoverAssets(join(process.cwd(), "public/assets")))};` : undefined; } });
 
-export default defineConfig({ plugins: [react(), assetLibrary()] });
+export default defineConfig({ base: basePath, plugins: [react(), assetLibrary()] });

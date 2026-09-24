@@ -2,11 +2,72 @@ import { expect, test } from "@playwright/test";
 
 test("exports an MP4 artifact from the motion composer", async ({ page }) => {
   await page.goto("/");
+  await page.getByRole("combobox", { name: "Export resolution" }).selectOption("720");
+  await page.getByRole("button", { name: "＋ Add text" }).click();
+  await page.getByRole("textbox", { name: "Text box content" }).fill("Built for the long game");
+  await page.getByRole("textbox", { name: "Text box content" }).blur();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download video" }).click();
   const artifact = await download;
   expect(artifact.suggestedFilename()).toMatch(/\.mp4$/);
   expect((await artifact.createReadStream())?.readable).toBeTruthy();
+});
+
+test("offers scaled export resolutions", async ({ page }) => {
+  await page.goto("/");
+  const resolution = page.getByRole("combobox", { name: "Export resolution" });
+  await expect(resolution).toHaveValue("1080");
+  await resolution.selectOption("2160");
+  await expect(resolution).toHaveValue("2160");
+  await expect(resolution.locator("option")).toHaveText(["720p", "1080p", "4K"]);
+});
+
+test("uses a lightweight preview render surface", async ({ page }) => {
+  await page.goto("/");
+  const canvas = page.locator(".preview-render-canvas");
+  await expect(canvas).toBeVisible();
+  const dimensions = await canvas.evaluate((node) => ({ width: (node as HTMLCanvasElement).width, height: (node as HTMLCanvasElement).height }));
+  expect(dimensions.width).toBeLessThanOrEqual(540);
+  expect(dimensions.height).toBeLessThanOrEqual(960);
+});
+
+test("uses public assets as reusable backdrops and overlays", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Use AppStore.svg as backdrop" }).click();
+  await expect(page.locator(".motion-backdrop-image")).toHaveAttribute("src", /\/assets\/AppStore\.svg$/);
+  await page.getByRole("button", { name: "Add Whiteandbrowntitle.png as overlay" }).click();
+  await expect(page.getByTestId("motion-stage").locator(".overlay-item img[alt='Whiteandbrowntitle.png']")).toBeVisible();
+});
+
+test("keeps the lightweight preview fluid and clears an image selection on blank canvas", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".preview-render-canvas")).toHaveAttribute("data-preview-fps", "60");
+  const stage = page.getByTestId("motion-stage");
+  await stage.evaluate((element) => { const file = new File(['<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>'], "selection.svg", { type: "image/svg+xml" }), transfer = new DataTransfer(); transfer.items.add(file); element.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer })); });
+  const overlay = stage.locator(".overlay-item");
+  await overlay.click();
+  await expect(overlay).toHaveClass(/selected/);
+  await stage.click({ position: { x: 8, y: 8 } });
+  await expect(overlay).not.toHaveClass(/selected/);
+});
+
+test("adds a selectable, draggable text box with focused controls", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByText("Text settings")).toHaveCount(0);
+  await page.getByRole("button", { name: "＋ Add text" }).click();
+  await expect(page.getByText("Text settings")).toBeVisible();
+  const box = page.getByLabel("Text box A line worth remembering");
+  await expect(box).toBeVisible();
+  await box.click();
+  await expect(box).toHaveAttribute("contenteditable", "true");
+  await box.fill("A sharper line");
+  await box.blur();
+  await expect(page.getByLabel("Text box A sharper line")).toBeVisible();
+  await page.getByRole("combobox", { name: "Text box entrance" }).selectOption("impact");
+  await page.getByRole("checkbox", { name: "Lock text box position" }).check();
+  await expect(page.getByLabel("Text box A sharper line")).toHaveClass(/locked/);
+  await page.locator(".duplicate-text-box").click();
+  await expect(page.locator(".text-box")).toHaveCount(2);
 });
 
 test("removes an image overlay from its visible remove control", async ({ page }) => {
@@ -33,9 +94,9 @@ test("restores the current motion graphic after a reload", async ({ page }) => {
 test("restores a locally uploaded backdrop after a reload", async ({ page }) => {
   await page.goto("/");
   await page.locator(".media-drop input").setInputFiles({ name: "saved-backdrop.svg", mimeType: "image/svg+xml", buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="#8B5E34"/></svg>') });
-  await expect(page.locator(".motion-backdrop-image")).toBeVisible();
+  await expect(page.locator(".preview-render-canvas")).toBeVisible();
   await page.reload();
-  await expect(page.locator(".motion-backdrop-image")).toBeVisible();
+  await expect(page.locator(".preview-render-canvas")).toBeVisible();
 });
 
 test("uses Command-H to apply the default accent highlight", async ({ page }) => {
@@ -45,6 +106,34 @@ test("uses Command-H to apply the default accent highlight", async ({ page }) =>
   await title.evaluate((node) => { const selection = window.getSelection(), range = document.createRange(); range.selectNodeContents(node); selection?.removeAllRanges(); selection?.addRange(range); });
   await page.keyboard.press("Meta+h");
   await expect.poll(() => page.getByTestId("motion-stage").locator(".phrase-accent").count()).toBeGreaterThan(0);
+});
+
+test("restarts the live preview with the chosen timing", async ({ page }) => {
+  await page.goto("/");
+  const stage = page.getByTestId("motion-stage"), copy = stage.locator(".stage-copy");
+  await copy.evaluate((node) => node.setAttribute("data-before-timing-change", "true"));
+  const entry = page.getByRole("spinbutton", { name: "Entry duration in seconds" });
+  await entry.fill("2.8");
+  await expect(copy).not.toHaveAttribute("data-before-timing-change", "true");
+  await expect(copy.locator("span").first()).toHaveCSS("animation-duration", "2.8s");
+  const stagger = page.getByRole("spinbutton", { name: "Word stagger in milliseconds" });
+  await stagger.fill("400");
+  await expect.poll(() => copy.locator("span").evaluateAll((spans) => spans.map((span) => getComputedStyle(span).animationDelay))).toContain("0.4s");
+});
+
+test("keeps a clip long enough for its final word to finish", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("spinbutton", { name: "Entry duration in seconds" }).fill("2.8");
+  await page.getByRole("spinbutton", { name: "Word stagger in milliseconds" }).fill("400");
+  await expect(page.getByRole("spinbutton", { name: "Clip length in seconds" })).not.toHaveValue("3");
+});
+
+test("can use a static composition with no text animation", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /None Static composition/ }).click();
+  const copy = page.getByTestId("motion-stage").locator(".stage-copy");
+  await expect(copy).toHaveClass(/motion-none/);
+  await expect(copy.locator("span").first()).toHaveCSS("animation-name", "none");
 });
 
 test("makes a stable animated text graphic over an uploaded backdrop", async ({ page }) => {
@@ -70,7 +159,7 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
     selection?.addRange(range);
   });
   await page.keyboard.type("Move with purpose  every day");
-  await page.getByRole("combobox").focus();
+  await page.locator(".composer-stage > header").getByRole("combobox").focus();
   await expect.poll(() => titleBox.evaluate((node) => node.textContent)).toBe("Move with purpose  every day");
   await page.getByText("Fine tune text", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Animate each word" })).toBeChecked();
@@ -126,7 +215,7 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   await expect(stage).toHaveAttribute("data-instance", token!);
 
   await page.locator(".media-drop input").setInputFiles({ name: "backdrop.svg", mimeType: "image/svg+xml", buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="#8B5E34"/></svg>') });
-  await expect(stage.locator(".motion-backdrop-image")).toBeVisible();
+  await expect(stage.locator(".preview-render-canvas")).toBeVisible();
   await expect(stage.locator(".stage-copy")).toContainText("Move with purpose");
   await stage.evaluate((element) => { const file = new File(['<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><circle cx="100" cy="50" r="45" fill="#D4AF37"/></svg>'], "badge.svg", { type: "image/svg+xml" }), transfer = new DataTransfer(); transfer.items.add(file); element.dispatchEvent(new DragEvent("drop", { bubbles: true, dataTransfer: transfer })); });
   await expect(stage.locator(".overlay-item img[alt='badge.svg']")).toBeVisible();
@@ -139,13 +228,15 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   const backdropEditor = page.getByRole("dialog", { name: "Edit backdrop" });
   await expect(backdropEditor).toBeVisible();
   await expect(backdropEditor.getByText("Frame your image")).toBeVisible();
+  await backdropEditor.getByRole("button", { name: "Show full video" }).click();
+  await expect(stage).toHaveClass(/fit-contain/);
   await backdropEditor.getByRole("button", { name: "Done" }).click();
   await expect(backdropEditor).toBeHidden();
   await stage.getByRole("button", { name: "Crop backdrop" }).click();
   await expect(backdropEditor).toBeVisible();
   await backdropEditor.getByRole("button", { name: "Close backdrop editor" }).click();
   await page.locator('input[type="range"]').first().press("ArrowRight");
-  await expect(stage.locator(".motion-backdrop-image")).toBeVisible();
+  await expect(stage.locator(".preview-render-canvas")).toBeVisible();
   await page.getByRole("button", { name: "+ Scene" }).click();
   await expect(page.locator(".scene-strip button")).toHaveCount(2);
 });

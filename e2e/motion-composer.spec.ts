@@ -43,10 +43,36 @@ test("uses the Aurelius Video Studio identity and fits the stage inside a laptop
 
 test("uses public assets as reusable backdrops and overlays", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Use AppStore.svg as backdrop" }).click();
-  await expect(page.locator(".motion-backdrop-image")).toHaveAttribute("src", /\/assets\/AppStore\.svg$/);
-  await page.getByRole("button", { name: "Add Whiteandbrowntitle.png as overlay" }).click();
-  await expect(page.getByTestId("motion-stage").locator(".overlay-item img[alt='Whiteandbrowntitle.png']")).toBeVisible();
+  await page.getByRole("button", { name: "Add AppStore.svg to canvas" }).click();
+  await expect(page.getByTestId("motion-stage").locator(".overlay-item img[alt='AppStore.svg']")).toBeVisible();
+  await expect(page.locator(".motion-backdrop-image")).toHaveCount(0);
+});
+
+test("renders exports at 60 frames per second through the full clip", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.addEventListener("aurelius:export-frame", ((event: CustomEvent<{ frame: number; fps: number }>) => {
+      document.body.dataset.exportFps = String(event.detail.fps);
+      document.body.dataset.exportFrames = String(event.detail.frame);
+    }) as EventListener);
+  });
+  await page.getByRole("combobox", { name: "Export resolution" }).selectOption("720");
+  const seconds = Number(await page.getByRole("spinbutton", { name: "Clip length in seconds" }).inputValue());
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download video" }).click();
+  await download;
+  await expect(page.locator("body")).toHaveAttribute("data-export-fps", "60");
+  const frames = Number(await page.locator("body").getAttribute("data-export-frames"));
+  expect(frames).toBeGreaterThanOrEqual(Math.floor(seconds * 60) - 1);
+});
+
+test("keeps export prominent and can remove header and footer", async ({ page }) => {
+  await page.goto("/");
+  const header = page.locator(".composer-stage > header");
+  await expect(header.getByRole("button", { name: "Download video" })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Show header and footer" }).uncheck();
+  await expect(page.locator(".stage-header")).toBeHidden();
+  await expect(page.locator(".stage-footer")).toBeHidden();
 });
 
 test("keeps the lightweight preview fluid and clears an image selection on blank canvas", async ({ page }) => {
@@ -169,7 +195,7 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
     selection?.addRange(range);
   });
   await page.keyboard.type("Move with purpose  every day");
-  await page.locator(".composer-stage > header").getByRole("combobox").focus();
+  await page.locator(".composer-stage > header > select").focus();
   await expect.poll(() => titleBox.evaluate((node) => node.textContent)).toBe("Move with purpose  every day");
   await page.getByText("Fine tune text", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Animate each word" })).toBeChecked();
@@ -205,7 +231,7 @@ test("makes a stable animated text graphic over an uploaded backdrop", async ({ 
   const reelBox = await stage.boundingBox();
   const previewFontSize = await page.locator(".stage-copy").evaluate((node) => Number.parseFloat(getComputedStyle(node).fontSize));
   expect(previewFontSize).toBeCloseTo(reelBox!.width * 88 / 1080, 1);
-  await page.locator(".composer-stage > header").getByRole("combobox").selectOption("portrait");
+  await page.locator(".composer-stage > header > select").selectOption("portrait");
   const portraitBox = await stage.boundingBox();
   expect(portraitBox!.width / portraitBox!.height).toBeGreaterThan(reelBox!.width / reelBox!.height);
   await page.getByRole("textbox", { name: "Text color hex" }).fill("#D4AF37");

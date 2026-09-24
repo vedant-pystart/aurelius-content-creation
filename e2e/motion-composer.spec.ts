@@ -31,6 +31,16 @@ test("uses a lightweight preview render surface", async ({ page }) => {
   expect(dimensions.height).toBeLessThanOrEqual(960);
 });
 
+test("uses the Aurelius Video Studio identity and fits the stage inside a laptop viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto("/");
+  await expect(page).toHaveTitle("Aurelius Video Studio");
+  await expect(page.getByRole("heading", { name: "Aurelius Video Studio" })).toBeVisible();
+  const stage = await page.getByTestId("motion-stage").boundingBox();
+  expect(stage).not.toBeNull();
+  expect(stage!.y + stage!.height).toBeLessThanOrEqual(800);
+});
+
 test("uses public assets as reusable backdrops and overlays", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Use AppStore.svg as backdrop" }).click();

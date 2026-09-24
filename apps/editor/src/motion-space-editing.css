@@ -44,9 +44,12 @@
 .edit-note { display: none !important; }
 
 /* Keep the reel at the top of the workspace instead of vertically centering it. */
-.composer-stage { grid-template-rows: auto auto auto auto; align-content: start; }
-.motion-stage { height: min(64vh, 720px); margin: 0 auto; }
-.motion-stage.portrait { height: min(64vh, 640px); }
+.composer-stage { grid-template-rows: auto auto auto auto; align-content: start; min-width: 0; padding: clamp(16px, 2vw, 28px); gap: clamp(12px, 1.8vh, 20px); }
+.motion-composer { min-height: 100dvh; }
+.motion-stage { height: min(58dvh, 660px); max-height: calc(100dvh - 192px); margin: 0 auto; }
+.motion-stage.portrait { height: min(58dvh, 600px); max-height: calc(100dvh - 192px); }
+.composer-controls { overflow-y: auto; }
+@media (max-width: 980px) { .motion-stage, .motion-stage.portrait { height: min(52dvh, 560px); max-height: none; } }
 
 .preview-playback { position: absolute; z-index: 6; left: 4%; bottom: 10%; border: 0; border-radius: 999px; padding: 6px 9px; background: #2a2522d9; color: #fffaf3; font: 700 9px Karla, system-ui, sans-serif; letter-spacing: .05em; cursor: pointer; }
 .preview-playback:hover { background: #8b5e34; }

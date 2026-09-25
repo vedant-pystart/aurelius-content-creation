@@ -166,7 +166,7 @@ export function MotionComposer() {
     download.onclick = () => void exportAll();
     footer.querySelector<HTMLElement>(".export-button")?.setAttribute("aria-hidden", "true");
     stage.current?.classList.toggle("hide-chrome", scene.showChrome === false);
-  }, [exportResolution, scene.showChrome, scenes.length]);
+  }, [exportResolution, scene.showChrome, scenes]);
   useEffect(() => { document.querySelector(".export-progress-overlay")?.remove(); if (!exportProgress) return; const overlay = document.createElement("div"); overlay.className = "export-progress-overlay"; overlay.setAttribute("role", "status"); overlay.innerHTML = `<section><span>Rendering ${exportProgress.resolution === 2160 ? "4K" : `${exportProgress.resolution}p`} video</span><strong>Scene ${exportProgress.scene} of ${exportProgress.total}</strong><div><i></i></div><small>${exportProgress.percent}% · Keep this tab open</small></section>`; overlay.querySelector<HTMLElement>("i")!.style.width = `${exportProgress.percent}%`; document.body.append(overlay); return () => overlay.remove(); }, [exportProgress]);
   useEffect(() => {
     document.title = "Aurelius Video Studio";

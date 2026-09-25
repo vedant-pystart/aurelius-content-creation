@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 test("exports an MP4 artifact from the motion composer", async ({ page }) => {
   await page.goto("/");
@@ -64,6 +65,91 @@ test("renders exports at 60 frames per second through the full clip", async ({ p
   await expect(page.locator("body")).toHaveAttribute("data-export-fps", "60");
   const frames = Number(await page.locator("body").getAttribute("data-export-frames"));
   expect(frames).toBeGreaterThanOrEqual(Math.floor(seconds * 60) - 1);
+});
+
+test("downloads a decodable MP4 with the real background and a completed animation", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("spinbutton", { name: "Entry duration in seconds" }).fill("2.2");
+  await page.getByRole("spinbutton", { name: "Clip length in seconds" }).fill("4");
+  const expectedDuration = Number(await page.getByRole("spinbutton", { name: "Clip length in seconds" }).inputValue());
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download video" }).click();
+  const download = await pending, path = await download.path();
+  expect(path).toBeTruthy();
+  const encoded = (await readFile(path!)).toString("base64");
+  const decoded = await page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: "video/mp4" }));
+    const video = document.createElement("video");
+    video.muted = true; video.playsInline = true; video.src = url;
+    await new Promise<void>((resolve, reject) => { video.onloadedmetadata = () => resolve(); video.onerror = () => reject(new Error("Exported MP4 did not decode")); });
+    const canvas = document.createElement("canvas"), width = 180, height = 320, context = canvas.getContext("2d")!;
+    canvas.width = width; canvas.height = height;
+    const sample = async (time: number) => {
+      await new Promise<void>((resolve, reject) => { video.onseeked = () => resolve(); video.onerror = () => reject(new Error("Could not seek exported MP4")); video.currentTime = time; });
+      context.drawImage(video, 0, 0, width, height);
+      const pixels = context.getImageData(0, 0, width, height).data;
+      const cornerBrightness = pixels[0]! + pixels[1]! + pixels[2]!;
+      let darkPixels = 0;
+      for (let y = 95; y < 225; y += 1) for (let x = 18; x < 162; x += 1) {
+        const offset = (y * width + x) * 4;
+        if (pixels[offset]! + pixels[offset + 1]! + pixels[offset + 2]! < 360) darkPixels += 1;
+      }
+      return { cornerBrightness, darkPixels };
+    };
+    const result = { duration: video.duration, first: await sample(.02), last: await sample(Math.max(.02, video.duration - .04)) };
+    URL.revokeObjectURL(url);
+    return result;
+  }, encoded);
+  expect(decoded.duration).toBeGreaterThanOrEqual(expectedDuration - .05);
+  expect(decoded.duration).toBeLessThan(expectedDuration + .15);
+  expect(decoded.first.cornerBrightness).toBeGreaterThan(600);
+  expect(decoded.last.cornerBrightness).toBeGreaterThan(600);
+  expect(decoded.last.darkPixels).toBeGreaterThan(decoded.first.darkPixels + 40);
+});
+
+test("exports moving video backdrops instead of black frames", async ({ page }) => {
+  await page.goto("/");
+  const source = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas"), context = canvas.getContext("2d")!;
+    canvas.width = 180; canvas.height = 320;
+    const stream = canvas.captureStream(30), chunks: Blob[] = [];
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8" : "video/webm";
+    const recorder = new MediaRecorder(stream, { mimeType });
+    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+    const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType })); });
+    recorder.start();
+    for (let frame = 0; frame < 24; frame += 1) {
+      context.fillStyle = frame < 12 ? "#D02020" : "#2050D0";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#FFFFFF"; context.fillRect(frame * 7, 130, 26, 60);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    recorder.stop(); stream.getTracks().forEach((track) => track.stop());
+    const blob = await done, bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = ""; bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+    return { base64: btoa(binary), type: blob.type };
+  });
+  await page.locator(".media-drop input").setInputFiles({ name: "moving.webm", mimeType: source.type, buffer: Buffer.from(source.base64, "base64") });
+  const editor = page.getByRole("dialog", { name: "Edit backdrop" });
+  await expect(editor.getByText(/seconds selected/)).toBeVisible();
+  await editor.getByRole("button", { name: "Next: frame" }).click();
+  await editor.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("combobox", { name: "Export resolution" }).selectOption("1080");
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download video" }).click();
+  const download = await pending, path = await download.path(), encoded = (await readFile(path!)).toString("base64");
+  const samples = await page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0)), url = URL.createObjectURL(new Blob([bytes], { type: "video/mp4" })), video = document.createElement("video");
+    video.muted = true; video.src = url;
+    await new Promise<void>((resolve, reject) => { video.onloadedmetadata = () => resolve(); video.onerror = () => reject(new Error("Video-backdrop export did not decode")); });
+    const canvas = document.createElement("canvas"), context = canvas.getContext("2d")!; canvas.width = 90; canvas.height = 160;
+    const sample = async (time: number) => { await new Promise<void>((resolve) => { video.onseeked = () => resolve(); video.currentTime = time; }); context.drawImage(video, 0, 0, 90, 160); const pixel = context.getImageData(3, 3, 1, 1).data; return [pixel[0], pixel[1], pixel[2]]; };
+    const result = [await sample(.08), await sample(video.duration - .08)]; URL.revokeObjectURL(url); return result;
+  }, encoded);
+  expect(samples[0]!.reduce((sum, value) => sum + value, 0)).toBeGreaterThan(100);
+  expect(samples[1]!.reduce((sum, value) => sum + value, 0)).toBeGreaterThan(100);
+  expect(Math.abs(samples[0]![0]! - samples[1]![0]!) + Math.abs(samples[0]![2]! - samples[1]![2]!)).toBeGreaterThan(40);
 });
 
 test("keeps export prominent and can remove header and footer", async ({ page }) => {

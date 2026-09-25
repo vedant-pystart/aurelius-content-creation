@@ -161,6 +161,29 @@ test("keeps export prominent and can remove header and footer", async ({ page })
   await expect(page.locator(".stage-footer")).toBeHidden();
 });
 
+test("paints the editable header and footer only once in the live preview", async ({ page }) => {
+  await page.addInitScript(() => {
+    const original = CanvasRenderingContext2D.prototype.fillText;
+    (window as typeof window & { __previewChromeCalls?: string[] }).__previewChromeCalls = [];
+    CanvasRenderingContext2D.prototype.fillText = function (text, x, y, maxWidth) {
+      if (text === "AURELIUS / A THOUGHT" || text === "KEEP WHAT MATTERS") {
+        (window as typeof window & { __previewChromeCalls?: string[] }).__previewChromeCalls!.push(text);
+      }
+      if (maxWidth === undefined) return original.call(this, text, x, y);
+      return original.call(this, text, x, y, maxWidth);
+    };
+  });
+  await page.goto("/");
+  const stage = page.getByTestId("motion-stage");
+  await expect(stage.locator(".stage-header")).toHaveCount(1);
+  await expect(stage.locator(".stage-footer")).toHaveCount(1);
+  await expect(stage.locator(".stage-header")).toHaveText("AURELIUS / A THOUGHT");
+  await expect(stage.locator(".stage-footer")).toHaveText("KEEP WHAT MATTERS");
+  await page.waitForTimeout(120);
+  const duplicateCanvasPaints = await page.evaluate(() => (window as typeof window & { __previewChromeCalls?: string[] }).__previewChromeCalls ?? []);
+  expect(duplicateCanvasPaints).toEqual([]);
+});
+
 test("keeps the lightweight preview fluid and clears an image selection on blank canvas", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".preview-render-canvas")).toHaveAttribute("data-preview-fps", "60");

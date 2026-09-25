@@ -152,6 +152,52 @@ test("exports moving video backdrops instead of black frames", async ({ page }) 
   expect(Math.abs(samples[0]![0]! - samples[1]![0]!) + Math.abs(samples[0]![2]! - samples[1]![2]!)).toBeGreaterThan(40);
 });
 
+test("keeps a short export at real-time source video speed", async ({ page }) => {
+  await page.goto("/");
+  const source = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas"), context = canvas.getContext("2d")!;
+    canvas.width = 180; canvas.height = 320;
+    const stream = canvas.captureStream(30), chunks: Blob[] = [];
+    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp8") ? "video/webm;codecs=vp8" : "video/webm";
+    const recorder = new MediaRecorder(stream, { mimeType });
+    recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+    const done = new Promise<Blob>((resolve) => { recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType })); });
+    recorder.start();
+    for (let frame = 0; frame < 120; frame += 1) {
+      // The source is about six seconds: the first four seconds are red, then blue.
+      // A three-second export should therefore still be red at its final frame.
+      context.fillStyle = frame < 80 ? "#D02020" : "#2050D0";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    recorder.stop(); stream.getTracks().forEach((track) => track.stop());
+    const blob = await done, bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = ""; bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+    return { base64: btoa(binary), type: blob.type };
+  });
+  await page.locator(".media-drop input").setInputFiles({ name: "realtime.webm", mimeType: source.type, buffer: Buffer.from(source.base64, "base64") });
+  const editor = page.getByRole("dialog", { name: "Edit backdrop" });
+  await expect(editor.getByText(/seconds selected/)).toBeVisible();
+  await editor.getByRole("button", { name: "Next: frame" }).click();
+  await editor.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("combobox", { name: "Export resolution" }).selectOption("720");
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download video" }).click();
+  const download = await pending, path = await download.path(), encoded = (await readFile(path!)).toString("base64");
+  const finalPixel = await page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: "video/mp4" })), video = document.createElement("video");
+    video.muted = true; video.src = url;
+    await new Promise<void>((resolve, reject) => { video.onloadedmetadata = () => resolve(); video.onerror = () => reject(new Error("Real-time export did not decode")); });
+    await new Promise<void>((resolve) => { video.onseeked = () => resolve(); video.currentTime = Math.max(.02, video.duration - .08); });
+    const canvas = document.createElement("canvas"), context = canvas.getContext("2d")!; canvas.width = 90; canvas.height = 160;
+    context.drawImage(video, 0, 0, 90, 160);
+    const pixel = context.getImageData(3, 3, 1, 1).data; URL.revokeObjectURL(url);
+    return [pixel[0], pixel[1], pixel[2]];
+  }, encoded);
+  expect(finalPixel[0]!).toBeGreaterThan(finalPixel[2]! + 35);
+});
+
 test("keeps export prominent and can remove header and footer", async ({ page }) => {
   await page.goto("/");
   const header = page.locator(".composer-stage > header");

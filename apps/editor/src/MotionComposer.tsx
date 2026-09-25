@@ -197,14 +197,19 @@ async function exportSceneRobust(
     const fps = 60, duration = Math.max(target.hold, minimumClipLength(target)), frameDuration = 1 / fps, frameCount = Math.max(2, Math.ceil(duration * fps) + 1);
     const scale = resolution / 1080, scene = { ...target, fontSize: target.fontSize * scale, textBoxes: target.textBoxes.map((box) => ({ ...box, fontSize: box.fontSize * scale })) };
     const words = layoutExportWords(context, scene, width, height);
-    const sourceStart = target.trimStart ?? 0, sourceEnd = media instanceof HTMLVideoElement ? Math.max(sourceStart, Math.min(target.trimEnd ?? media.duration, media.duration)) : 0;
+    // The graphic timeline and the source-video clock are intentionally separate.
+    // A trim end limits how far we may read, but it must never be stretched to
+    // fill a shorter graphic. This keeps a 3s graphic at 3s of real-time video.
+    const sourceStart = target.trimStart ?? 0;
+    const sourceLimit = media instanceof HTMLVideoElement ? Math.max(sourceStart, Math.min(target.trimEnd ?? media.duration, media.duration)) : sourceStart;
+    const sourceEnd = media instanceof HTMLVideoElement ? Math.min(sourceLimit, sourceStart + duration) : sourceStart;
     const output = new Output({ format: new Mp4OutputFormat({ fastStart: "in-memory" }), target: new BufferTarget() });
     const videoSource = new CanvasSource(canvas, { codec: "avc", quality: new Quality("very-high"), keyFrameInterval: 1 });
     output.addVideoTrack(videoSource, { frameRate: fps });
     await output.start();
     for (let frame = 0; frame < frameCount; frame += 1) {
       const timelineProgress = frame / (frameCount - 1), elapsed = timelineProgress * duration;
-      if (media instanceof HTMLVideoElement) await seekExportVideo(media, sourceStart + (sourceEnd - sourceStart) * timelineProgress);
+      if (media instanceof HTMLVideoElement) await seekExportVideo(media, Math.min(sourceEnd, sourceStart + elapsed));
       context.save(); context.fillStyle = target.background; context.fillRect(0, 0, width, height);
       if (media) drawExportBackdrop(context, media, scene, width, height);
       overlays.forEach((overlay) => { const overlayWidth = width * overlay.width / 100, overlayHeight = overlayWidth * overlay.image.naturalHeight / Math.max(1, overlay.image.naturalWidth); context.drawImage(overlay.image, width * overlay.x / 100 - overlayWidth / 2, height * overlay.y / 100 - overlayHeight / 2, overlayWidth, overlayHeight); });

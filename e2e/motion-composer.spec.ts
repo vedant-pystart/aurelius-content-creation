@@ -44,9 +44,20 @@ test("uses the Aurelius Video Studio identity and fits the stage inside a laptop
 
 test("uses public assets as reusable backdrops and overlays", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Add AppStore.svg to canvas" }).click();
+  await page.locator(".asset-use").first().click();
   await expect(page.getByTestId("motion-stage").locator(".overlay-item img[alt='AppStore.svg']")).toBeVisible();
   await expect(page.locator(".motion-backdrop-image")).toHaveCount(0);
+});
+
+test("clicking an asset after choosing a backdrop adds an overlay without replacing it", async ({ page }) => {
+  await page.goto("/");
+  await page.locator(".media-drop input").setInputFiles({ name: "keep-this-backdrop.svg", mimeType: "image/svg+xml", buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect width="1080" height="1920" fill="#8B5E34"/></svg>') });
+  const stage = page.getByTestId("motion-stage");
+  await expect(stage.locator(".motion-backdrop-image")).toHaveCount(1);
+  const backdropSource = await stage.locator(".motion-backdrop-image").getAttribute("src");
+  await page.locator(".asset-use").first().click();
+  await expect(stage.locator(".overlay-item img[alt='AppStore.svg']")).toBeVisible();
+  await expect(stage.locator(".motion-backdrop-image")).toHaveAttribute("src", backdropSource!);
 });
 
 test("renders exports at 60 frames per second through the full clip", async ({ page }) => {

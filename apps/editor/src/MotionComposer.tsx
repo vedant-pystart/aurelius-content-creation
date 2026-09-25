@@ -27,7 +27,14 @@ const readAsset = async (key: string) => { const db = await openAssetDatabase();
 const removeAsset = async (key?: string) => { if (!key) return; const db = await openAssetDatabase(); await new Promise<void>((resolve, reject) => { const request = db.transaction(assetStore, "readwrite").objectStore(assetStore).delete(key); request.onsuccess = () => resolve(); request.onerror = () => reject(request.error); }); db.close(); };
 const fineTuneDefaults = { fontSize: 88, speed: 1.4, stagger: 90, stretch: 1, tracking: -.055, wordByWord: true, hollow: false } satisfies Pick<Scene, "fontSize" | "speed" | "stagger" | "stretch" | "tracking" | "wordByWord" | "hollow">;
 const fresh = (title = "The obstacle is the way."): Scene => ({ id: uid(), title, header: "AURELIUS / A THOUGHT", footer: "KEEP WHAT MATTERS", showChrome: true, format: "reel", motion: "rise", font: "Crimson Pro", ...fineTuneDefaults, titlePosition: "center", overlays: [], textBoxes: [], hold: 3, background: "#FBF3E6", textColor: "#2A2522", accentColor: "#8B5E34", backdropFade: true, backdropFit: "cover", cropX: 50, cropY: 50, cropZoom: 1, motionRun: 0 });
-const minimumClipLength = (scene: Scene) => { const primary = scene.motion === "none" ? .5 : scene.speed + Math.max(0, (scene.title.match(/\S+/g)?.length ?? 1) - 1) * scene.stagger / 1000 + .5, boxes = Math.max(.5, ...scene.textBoxes.map((box) => box.start + box.duration + .35)); return Math.max(.5, Math.ceil(Math.max(primary, boxes) * 10) / 10); };
+const minimumClipLength = (scene: Scene) => {
+  const words = (scene.title.match(/\S+/g)?.length ?? 0) + (scene.header.includes("QUOTE") ? 1 : 0);
+  const stagger = scene.wordByWord ? Math.max(0, words - 1) * scene.stagger / 1000 : 0;
+  const emphasis = scene.highlightPhrase && (scene.highlightDelay ?? scene.highlightStyle === "delay") ? .26 : 0;
+  const primary = scene.motion === "none" ? .5 : scene.speed + stagger + emphasis + .5;
+  const boxes = Math.max(.5, ...scene.textBoxes.map((box) => box.start + box.duration + .35));
+  return Math.ceil(Math.max(primary, boxes) * 10) / 10;
+};
 const fonts = ["Crimson Pro", "Karla", "Georgia", "Impact"] as const;
 const motions: readonly { id: Motion; name: string; note: string }[] = [
   { id: "none", name: "None", note: "Static composition" },
@@ -127,28 +134,6 @@ export function MotionComposer() {
   const reorder = (direction: -1 | 1) => { const next = active + direction; if (next < 0 || next >= scenes.length) return; setScenes((all) => { const copy = [...all]; [copy[active], copy[next]] = [copy[next]!, copy[active]!]; return copy; }); setActive(next); };
   const saveStyle = () => { const name = prompt("Name this style preset:")?.trim(); if (!name) return; const saved = { ...savedStyles, [name]: { background: scene.background, textColor: scene.textColor, accentColor: scene.accentColor, font: scene.font, hollow: scene.hollow } }; localStorage.setItem("marginalia-style-presets", JSON.stringify(saved)); setSavedStyles(saved); setStatus(`Saved “${name}”.`); };
   const exportAll = async () => { try { for (let index = 0; index < scenes.length; index += 1) await exportSceneRobust(scenes[index]!, index, scenes.length, exportResolution, setExportProgress, setStatus); } finally { setExportProgress(undefined); } };
-  const exportScene = async (target: Scene, index: number) => { await document.fonts?.ready;
-    if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) return setStatus("Video download needs a current desktop browser.");
-    const canvas = document.createElement("canvas"), w = exportResolution, h = target.format === "reel" ? Math.round(exportResolution * 16 / 9) : Math.round(exportResolution * 5 / 4); canvas.width = w; canvas.height = h; const ctx = canvas.getContext("2d"); if (!ctx) return;
-    const stream = canvas.captureStream(0), track = stream.getVideoTracks()[0], mime = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find(MediaRecorder.isTypeSupported); if (!track || !mime) return setStatus("No supported browser video encoder.");
-    try {
-      setStatus(`Preparing scene ${index + 1} of ${scenes.length}…`); setExportProgress({ scene: index + 1, total: scenes.length, percent: 0, resolution: exportResolution });
-      const media = target.backdropUrl ? await loadExportMedia(target.backdropUrl, target.backdropKind) : undefined;
-      const overlays = await Promise.all((target.overlays ?? []).filter((overlay): overlay is Overlay & { url: string } => Boolean(overlay.url)).map((overlay) => loadExportImage(overlay.url).then((image) => ({ ...overlay, image }))));
-      const exportDuration = Math.max(target.hold, minimumClipLength(target)), frames = Math.max(1, Math.round(exportDuration * 30)), chunks: Blob[] = [], recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: exportResolution === 2160 ? 52_000_000 : exportResolution === 1080 ? 24_000_000 : 12_000_000 });
-      const sourceStart = target.trimStart ?? 0, sourceEnd = media instanceof HTMLVideoElement ? Math.max(sourceStart, Math.min(target.trimEnd ?? media.duration, media.duration)) : 0, exportScale = exportResolution / 1080, renderScene = { ...target, fontSize: target.fontSize * exportScale, textBoxes: target.textBoxes.map((box) => ({ ...box, fontSize: box.fontSize * exportScale })) };
-      const words = layoutExportWords(ctx, renderScene, w, h);
-      const draw = async (frame: number) => { const progress = frame / Math.max(1, frames - 1), elapsed = progress * exportDuration;
-        if (media instanceof HTMLVideoElement) await seekExportVideo(media, sourceStart + (sourceEnd - sourceStart) * progress);
-        ctx.save(); ctx.fillStyle = target.background; ctx.fillRect(0, 0, w, h);
-        if (media) drawExportBackdrop(ctx, media, renderScene, w, h);
-        overlays.forEach((overlay) => { const width = w * overlay.width / 100, height = width * overlay.image.naturalHeight / Math.max(1, overlay.image.naturalWidth); ctx.drawImage(overlay.image, w * overlay.x / 100 - width / 2, h * overlay.y / 100 - height / 2, width, height); });
-        ctx.strokeStyle = renderScene.accentColor; ctx.lineWidth = 2 * exportScale; ctx.beginPath(); ctx.moveTo(72 * exportScale, 112 * exportScale); ctx.lineTo(w - 72 * exportScale, 112 * exportScale); ctx.stroke(); ctx.fillStyle = renderScene.accentColor; ctx.font = `600 ${22 * exportScale}px Karla, system-ui, sans-serif`; ctx.textAlign = "left"; ctx.fillText(renderScene.header, 72 * exportScale, 76 * exportScale); ctx.textAlign = "right"; ctx.fillText(renderScene.footer, w - 72 * exportScale, h - 74 * exportScale);
-        const renderTarget = renderScene.motion === "none" ? { ...renderScene, wordByWord: false, speed: .01 } : renderScene; words.forEach((word) => drawExportWord(ctx, word, renderTarget, elapsed)); renderScene.textBoxes.forEach((box) => drawExportTextBox(ctx, box, elapsed, w, h)); ctx.restore();
-      };
-      await new Promise<void>((resolve, reject) => { recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); }; recorder.onerror = () => reject(new Error("The browser encoder stopped unexpectedly.")); recorder.onstop = () => { stream.getTracks().forEach((item) => item.stop()); const blob = new Blob(chunks, { type: mime }); if (!blob.size) return reject(new Error("The browser returned an empty video file.")); const ext = mime.startsWith("video/mp4") ? "mp4" : "webm", url = URL.createObjectURL(blob), link = document.createElement("a"); link.href = url; link.download = `${target.title.replace(/[^a-z0-9]/gi, "-").toLowerCase() || `scene-${index + 1}`}-${exportResolution}p.${ext}`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 30_000); setExportProgress({ scene: index + 1, total: scenes.length, percent: 100, resolution: exportResolution }); if (index === scenes.length - 1) setStatus(ext === "mp4" ? "Your videos are ready." : "Downloaded as WebM because this browser cannot encode MP4."); resolve(); }; recorder.start(); void (async () => { for (let frame = 0; frame < frames; frame += 1) { await draw(frame); (track as MediaStreamTrack & { requestFrame?(): void }).requestFrame?.(); if (frame % 3 === 0 || frame === frames - 1) { const percent = Math.round((frame + 1) / frames * 100); setStatus(`Rendering scene ${index + 1} · ${percent}%`); setExportProgress({ scene: index + 1, total: scenes.length, percent, resolution: exportResolution }); } await new Promise((next) => setTimeout(next, 1000 / 30)); } recorder.stop(); })().catch(reject); });
-    } catch (error) { stream.getTracks().forEach((item) => item.stop()); setStatus(error instanceof Error ? `Export failed: ${error.message}` : "Export failed. Please try again."); }
-  };
   useEffect(() => { const footer = document.querySelector<HTMLElement>(".composer-footer"); if (!footer) return; let controls = document.querySelector<HTMLElement>(".export-resolution"); if (!controls) { controls = document.createElement("label"); controls.className = "export-resolution"; controls.innerHTML = 'Export <select aria-label="Export resolution"><option value="720">720p</option><option value="1080">1080p</option><option value="2160">4K</option></select>'; footer.insertBefore(controls, footer.querySelector(".export-button")); } const select = controls.querySelector<HTMLSelectElement>("select")!; select.value = String(exportResolution); select.onchange = () => setExportResolution(Number(select.value) as ExportResolution); }, [exportResolution]);
   useEffect(() => {
     const header = document.querySelector<HTMLElement>(".composer-stage > header"), footer = document.querySelector<HTMLElement>(".composer-footer");
@@ -260,5 +245,54 @@ function drawExportBackdrop(ctx: CanvasRenderingContext2D, media: HTMLImageEleme
 function drawMotionFrame(ctx: CanvasRenderingContext2D, scene: Scene, elapsed: number, media?: HTMLImageElement | HTMLVideoElement, overlays: readonly HTMLImageElement[] = [], includeChrome = true) { const width = ctx.canvas.width, height = ctx.canvas.height; ctx.save(); ctx.fillStyle = scene.background; ctx.fillRect(0, 0, width, height); if (media) drawExportBackdrop(ctx, media, scene, width, height); overlays.forEach((image) => { if (!image.naturalWidth || !image.naturalHeight) return; const parent = image.parentElement, x = Number.parseFloat(parent?.style.left ?? "50"), y = Number.parseFloat(parent?.style.top ?? "50"), size = Number.parseFloat(parent?.style.width ?? "32"), drawWidth = width * size / 100, drawHeight = drawWidth * image.naturalHeight / image.naturalWidth; ctx.drawImage(image, width * x / 100 - drawWidth / 2, height * y / 100 - drawHeight / 2, drawWidth, drawHeight); }); if (includeChrome) { ctx.strokeStyle = scene.accentColor; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(72, 112); ctx.lineTo(width - 72, 112); ctx.stroke(); ctx.fillStyle = scene.accentColor; ctx.font = "600 22px Karla, system-ui, sans-serif"; ctx.textAlign = "left"; ctx.fillText(scene.header, 72, 76); ctx.textAlign = "right"; ctx.fillText(scene.footer, width - 72, height - 74); } const renderTarget = scene.motion === "none" ? { ...scene, wordByWord: false, speed: .01 } : scene; layoutExportWords(ctx, renderTarget, width, height).forEach((word) => drawExportWord(ctx, word, renderTarget, elapsed)); ctx.restore(); }
 function layoutExportWords(ctx: CanvasRenderingContext2D, scene: Scene, width: number, height: number): ExportWord[] { ctx.font = `600 ${scene.fontSize}px ${family(scene.font)}`; const maxWidth = width * .82, source = scene.title.split("\n"), lines: string[][] = []; source.forEach((raw) => { const next = scene.header.includes("QUOTE") && !lines.length ? `“ ${raw}` : raw; let line: string[] = []; next.trim().split(/\s+/).filter(Boolean).forEach((word) => { const candidate = [...line, word].join(" "); if (line.length && ctx.measureText(candidate).width > maxWidth) { lines.push(line); line = [word]; } else line.push(word); }); if (line.length) lines.push(line); }); const center = scene.titlePosition === "top" ? height * .31 : scene.titlePosition === "bottom" ? height * .68 : height * .51, lineHeight = scene.fontSize * 1.12, result: ExportWord[] = [], phrase = scene.highlightPhrase?.trim().toLowerCase(), italicPhrase = scene.italicPhrase?.trim().toLowerCase(), title = scene.title.toLowerCase(), phraseStart = phrase ? title.indexOf(phrase) : -1, italicStart = italicPhrase ? title.indexOf(italicPhrase) : -1; let index = 0, cursor = 0; lines.forEach((line, lineIndex) => { const joined = line.join(" "), startX = (width - ctx.measureText(joined).width) / 2; let x = startX; line.forEach((text) => { const charStart = title.indexOf(text.toLowerCase(), cursor), charEnd = charStart + text.length; cursor = Math.max(cursor, charEnd); result.push({ text, x, y: center + (lineIndex - (lines.length - 1) / 2) * lineHeight, index: index++, highlighted: phraseStart >= 0 && charStart < phraseStart + (phrase?.length ?? 0) && charEnd > phraseStart, italic: italicStart >= 0 && charStart < italicStart + (italicPhrase?.length ?? 0) && charEnd > italicStart }); x += ctx.measureText(`${text} `).width; }); }); return result; }
 function drawExportTextBox(ctx: CanvasRenderingContext2D, box: TextBox, elapsed: number, width: number, height: number) { const progress = box.motion === "none" ? 1 : clamp((elapsed - box.start) / Math.max(.05, box.duration)); if (!progress) return; const ease = easeOut(progress); let x = width * box.x / 100, y = height * box.y / 100, alpha = ease, scale = 1, filter = "none"; if (box.motion === "rise" || box.motion === "cascade") y += (1 - ease) * box.fontSize * .55; if (box.motion === "drift") x += (1 - ease) * box.fontSize * .25; if (box.motion === "impact" || box.motion === "zoom") scale = .72 + ease * .28; if (box.motion === "blur-pop") { scale = .88 + ease * .12; filter = `blur(${(1 - ease) * 12}px)`; } if (box.motion === "bounce") scale = .75 + (1 - Math.exp(-7 * progress) * Math.cos(14 * progress)) * .25; if (box.motion === "glitch") { alpha = progress < .18 ? .45 : 1; x += progress < .18 ? 12 : 0; } ctx.save(); ctx.globalAlpha = alpha; ctx.filter = filter; ctx.fillStyle = box.color; ctx.font = `${box.weight} ${box.fontSize}px ${family(box.font)}`; ctx.textBaseline = "middle"; ctx.textAlign = box.align; ctx.translate(x, y); ctx.scale(scale, scale); const lineHeight = box.fontSize * 1.08, lines = box.text.split("\n"); lines.forEach((line, index) => ctx.fillText(line, 0, (index - (lines.length - 1) / 2) * lineHeight)); ctx.restore(); }
-function drawExportWord(ctx: CanvasRenderingContext2D, word: ExportWord, scene: Scene, elapsed: number) { const delay = scene.wordByWord ? word.index * scene.stagger / 1000 : 0, progress = clamp((elapsed - delay) / Math.max(.05, scene.speed)); if (!progress) return; const ease = easeOut(progress); let alpha = ease, x = word.x, y = word.y, scale = 1, filter = "none"; if (scene.motion === "rise" || scene.motion === "cascade") y += (1 - ease) * scene.fontSize * .55; if (scene.motion === "drift") x += (1 - ease) * scene.fontSize * .25; if (scene.motion === "impact" || scene.motion === "zoom") scale = .72 + ease * .28; if (scene.motion === "blur-pop") { scale = .88 + ease * .12; filter = `blur(${(1 - ease) * 12}px)`; } if (scene.motion === "bounce") { const spring = 1 - Math.exp(-7 * progress) * Math.cos(14 * progress); scale = .75 + spring * .25; } if (scene.motion === "glitch") { alpha = progress < .18 ? (word.index % 2 ? .15 : .85) : 1; x += progress < .18 ? (word.index % 2 ? -12 : 12) : 0; } if (scene.motion === "wipe" || scene.motion === "reveal") { ctx.save(); ctx.beginPath(); ctx.rect(word.x - scene.fontSize * .12, word.y - scene.fontSize * 1.2, ctx.measureText(word.text).width * ease + scene.fontSize * .24, scene.fontSize * 2.05); ctx.clip(); }
-  ctx.save(); ctx.globalAlpha = alpha; ctx.filter = filter; ctx.font = `${word.italic ? "italic " : ""}600 ${scene.fontSize}px ${family(scene.font)}`; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; const metrics = ctx.measureText(word.text || "Mg"), ascent = metrics.actualBoundingBoxAscent || scene.fontSize * .76, descent = metrics.actualBoundingBoxDescent || scene.fontSize * .24; ctx.translate(x, y + (ascent - descent) / 2); ctx.scale(scale, scene.stretch * scale); ctx.fillStyle = word.highlighted && (scene.highlightAccent ?? scene.highlightStyle === "accent") ? scene.highlightColor ?? scene.accentColor : scene.textColor; if (scene.hollow || (word.highlighted && scene.highlightStyle === "hollow")) { ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = Math.max(2, scene.fontSize * .025); ctx.strokeText(word.text, 0, 0); } else ctx.fillText(word.text, 0, 0); if (word.highlighted && scene.highlightGlow) { ctx.shadowColor = scene.highlightColor ?? scene.accentColor; ctx.shadowBlur = 20; ctx.fillText(word.text, 0, 0); } ctx.restore(); if (scene.motion === "wipe" || scene.motion === "reveal") ctx.restore(); }
+function drawExportWord(ctx: CanvasRenderingContext2D, word: ExportWord, scene: Scene, elapsed: number) {
+  const emphasisDelay = word.highlighted && (scene.highlightDelay ?? scene.highlightStyle === "delay") ? .26 : 0;
+  const delay = (scene.wordByWord ? word.index * scene.stagger / 1000 : 0) + emphasisDelay;
+  const progress = scene.motion === "none" ? 1 : clamp((elapsed - delay) / Math.max(.05, scene.speed));
+  if (progress <= 0) return;
+  const ease = easeOut(progress);
+  let x = word.x, y = word.y, scale = 1, alpha = ease;
+  ctx.save();
+  try {
+    // All measurement and clipping uses this word's font, never the previous
+    // header/footer's font or alignment. Restore keeps words independent.
+    ctx.font = (word.italic ? "italic " : "") + "600 " + scene.fontSize + "px " + family(scene.font);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    const metrics = ctx.measureText(word.text);
+    const lineMetrics = ctx.measureText("Mg");
+    const ascent = lineMetrics.actualBoundingBoxAscent || scene.fontSize * .76;
+    const descent = lineMetrics.actualBoundingBoxDescent || scene.fontSize * .24;
+    if (scene.motion === "rise" || scene.motion === "cascade") y += (1 - ease) * scene.fontSize * .55;
+    if (scene.motion === "drift") x += (1 - ease) * scene.fontSize * .25;
+    if (scene.motion === "impact" || scene.motion === "zoom") scale = .72 + ease * .28;
+    if (scene.motion === "blur-pop") {
+      scale = .88 + ease * .12;
+      ctx.filter = "blur(" + (1 - ease) * scene.fontSize * .136 + "px)";
+    }
+    if (scene.motion === "bounce" && progress < 1) scale = .75 + (1 - Math.exp(-7 * progress) * Math.cos(14 * progress)) * .25;
+    if (scene.motion === "glitch" && progress < .18) { alpha = word.index % 2 ? .15 : .85; x += (word.index % 2 ? -1 : 1) * scene.fontSize * .136; }
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.scale(scale, scene.stretch * scale);
+    const baseline = (ascent - descent) / 2;
+    // Masks exist only during entry. Their bounds include the actual glyph
+    // bearings, descenders, italic overhang, and stroke padding.
+    if (progress < 1 && ["wipe", "reveal", "type"].includes(scene.motion)) {
+      const padding = scene.fontSize * .12;
+      const left = -Math.max(0, metrics.actualBoundingBoxLeft) - padding;
+      const right = Math.max(metrics.width, metrics.actualBoundingBoxRight) + padding;
+      const reveal = scene.motion === "type" ? Math.floor(progress * word.text.length) / Math.max(1, word.text.length) : ease;
+      ctx.beginPath();
+      ctx.rect(left, baseline - ascent - padding, (right - left) * reveal, ascent + descent + 2 * padding);
+      ctx.clip();
+    }
+    ctx.fillStyle = word.highlighted && (scene.highlightAccent ?? scene.highlightStyle === "accent") ? scene.highlightColor ?? scene.accentColor : scene.textColor;
+    if (word.highlighted && scene.highlightGlow) { ctx.shadowColor = scene.highlightColor ?? scene.accentColor; ctx.shadowBlur = scene.fontSize * .23; }
+    if (scene.hollow || (word.highlighted && scene.highlightStyle === "hollow")) {
+      ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = scene.fontSize * .025; ctx.strokeText(word.text, 0, baseline);
+    } else ctx.fillText(word.text, 0, baseline);
+  } finally {
+    ctx.restore();
+  }
+}
